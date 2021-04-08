@@ -5,16 +5,21 @@ import metpy.calc as mpc
 import pickle as pickle 
 from metpy.units import units
 
-; ------------- File names: -----------
-dataDir  = '/Users/mdfowler/Documents/Analysis/CLUBB_initial/data/'
+# ------------- File names: -----------
+#dataDir  = '/Users/mdfowler/Documents/Analysis/CLUBB_initial/data/'
+dataDir = '/glade/work/mdfowler/data/temp_staging/'
 
-z3file   = dataDir+'daily/f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.2000_Z3.nc'
-varsFile = dataDir+'daily/f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.2000_RiVars.nc'
-topoFile = dataDir+'fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
-pressFile = dataDir+'daily/f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.2000_PresLevs.nc'
-fileOut   = dataDir+'daily/GradientRichardsonNumber_2000.nc'   
+yearChoice = '2009'
 
-; ---------- Read in data and limit to lower atmospheric levels ------- 
+z3file   = dataDir+'f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.'+yearChoice+'_Z3.nc'
+varsFile = dataDir+'f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.'+yearChoice+'_RiVars.nc'
+#topoFile = 'fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
+topoFile = '/glade/p/cesmdata/cseg/inputdata/atm/cam/topo/fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_c170103.nc'
+pressFile = dataDir+'f.e20.FHIST.f09_f09.cesm2_1.001.cam.h1.'+yearChoice+'_PresLevs.nc'
+
+fileOut   = dataDir+'GradientRichardsonNumber_'+yearChoice+'.nc'   
+
+# ---------- Read in data and limit to lower atmospheric levels ------- 
 # Open files into datasets 
 z3_ds         = xr.open_dataset(z3file, decode_times=True)
 z3_ds['time'] = z3_ds.indexes['time'].to_datetimeindex()
@@ -28,7 +33,8 @@ pressDS['time'] = pressDS.indexes['time'].to_datetimeindex()
 topo_ds         = xr.open_dataset(topoFile, decode_times=True)
 
 # Read in a land mask at the same resolution 
-testName = '/Users/mdfowler/Documents/Analysis/CLUBB_initial/data/f.e20.FHIST.f09_f09.cesm2_1.001.clm2.h0.1989-12.nc'
+#testName = '/Users/mdfowler/Documents/Analysis/CLUBB_initial/data/f.e20.FHIST.f09_f09.cesm2_1.001.clm2.h0.1989-12.nc'
+testName = '/glade/p/cgd/amp/amwg/runs/f.e20.FHIST.f09_f09.cesm2_1.001/lnd/hist/f.e20.FHIST.f09_f09.cesm2_1.001.clm2.h0.1972-01.nc'
 testDF   = xr.open_dataset(testName)
 
 # Make land mask
@@ -44,7 +50,7 @@ z3_ds   = z3_ds.isel(lev=iLev)
 varsDS  = varsDS.isel(lev=iLev)
 pressDS = pressDS.isel(lev=iLev)
 
-; ------------- Compute height above ground and potential temperature ------ 
+# ------------- Compute height above ground and potential temperature ------ 
 # Get height (above ground level)
 Z3   = z3_ds.Z3.values*landMask
 PHIS = topo_ds.PHIS.values*landMask
@@ -78,7 +84,7 @@ del z3_ds
 del topo_ds
 del testDF
 
-; --------- Compute gradient richardson number ------
+# --------- Compute gradient richardson number ------
 # Compute gradient richardson number
 U = (varsDS.U.values) * units('m/s')
 V = (varsDS.V.values) * units('m/s')
@@ -87,6 +93,20 @@ print('Computing Ri...')
 
 Ri = mpc.gradient_richardson_number(z_agl, potTemp, U, V, 1)
 
-; --------- Save Ri to pickle file ---------
-pickle.dump( Ri, open(fileOut, "wb") )
+# --------- Save Ri to pickle file ---------
+# pickle.dump( Ri, open(fileOut, "wb") )
+#ds_out = xr.Dataset( 
+#            data_vars=dict(
+#                       Ri=(['time','lev','lat','lon'], Ri)),
+#            coords=dict(
+#                      time=(['time'],varsDS.time.values),
+#                      lev=(['lev'],varsDS.lev.values),
+#                      lat=(['lat'],varsDS.lat.values),
+#                      lon=(['lon'],varsDS.lon.values)) )
+print('Creating DataArray and writing out to netCDF...')
+ds_out = xr.DataArray(np.asarray(Ri), coords=[varsDS.time.values, varsDS.lev.values,varsDS.lat.values, varsDS.lon.values], dims=['time','lev','lat','lon']) 
+
+ds_out.to_netcdf(path=fileOut,mode='w')
+     
+
 
